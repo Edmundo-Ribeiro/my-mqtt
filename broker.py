@@ -47,7 +47,10 @@ class Broker:
 
 	def receive_packet(self,client_socket):
 		try:
+		# print("t",self.host_socket.gettimeout())
+			print(".")
 			header = client_socket.recv(HEADERSIZE)
+			print("-")
 			# print("header = ",header)
 			if not len(header):
 				return self.ping(client_socket)
@@ -60,8 +63,8 @@ class Broker:
 
 			c = client_socket.recv(packet_size).decode('utf-8')
 			data = json.loads(c)
+			print(f'\nPacket received ! \ntype: {packet_type} | size: {packet_size}\ncontent: {data} \n')
 			print("\n..................................................................................")
-			print(f'\nPacket received!\ntype: {packet_type} | size: {packet_size}\ncontent: {data} \n')
 			return p.packet(packet_type, data)
 
 		except:
@@ -92,7 +95,11 @@ class Broker:
 			return False
 
 	def ping(self, client_socket):
-		self.send_ack(client_socket, "PINGREQ")
+		if not self.send_ack(client_socket, "PINGREQ"):
+			print(f'Cound\'t send PINGREQ...\nClosing connetion with: {client_socket}')
+			client_socket.close()
+			return False
+
 		if not self.receive_ack():
 			print(f'No response to PINGREQ...\nClosing connetion with: {client_socket}')
 			client_socket.close()
@@ -115,9 +122,10 @@ class Broker:
 		try:
 			while True:
 				#scan dos sockects monitorados para verificar se tem algo novo 
-				read_sockets, _, exception_sockets = select.select(self.clients, [], self.clients)
-
+				read_sockets, _, exception_sockets = select.select(self.clients, [], self.clients, self.host_socket.gettimeout())
+				# print("outs", exception_sockets)
 				#pra cada um deles ver se
+
 				for notified_client in read_sockets:
 
 					#É uma nova conexão chegando
@@ -131,6 +139,7 @@ class Broker:
 						
 						#se for nulo, repetir while
 						if pkt is False:
+							print("pkt false?")
 							continue
 
 						#acidionar socket na lista de monitorados
@@ -167,6 +176,8 @@ class Broker:
 						# 	print(pkt.data)
 
 						#Se for do tipo PUBLISH
+
+
 						if packet_type == "PUBLISH":
 
 							#mandar PUBACK para o cliente
@@ -231,11 +242,22 @@ class Broker:
 						elif packet_type == "PINGREQ":
 							self.send_ack(notified_client,"PINGRESP")
 
+						elif packet_type == "PINGRESP":
+							# self.send_ack(notified_client,"PINGRESP")
+							print("ok...")
 
+				# if len(read_sockets) == 0:
+				# 	for client in self.clients:
+				# 		if client != self.host_socket:
+				# 			self.ping(client)
 
 
 
 		except:
+			print("AHHHHHHHH")
+			for client in self.clients:
+				if client != self.host_socket:
+					self.ping(client)
 
 			#Se algo deu errado ou apertou [ ^C ] fechar socket
 			print(".....")
@@ -244,7 +266,7 @@ class Broker:
 
 def main():
 
-	b = Broker(timeout = 5)
+	b = Broker()
 	b.start()
 	b.run()
 
